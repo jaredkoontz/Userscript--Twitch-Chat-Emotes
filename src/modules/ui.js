@@ -95,7 +95,7 @@ UIMenuButton.prototype.isVisible = function () {
 function UIMenu() {
 	this.dom = null;
 	this.groups = {};
-	this.emotes = {};
+	this.emotes = [];
 	this.offset = null;
 	this.favorites = null;
 }
@@ -244,10 +244,26 @@ UIMenu.prototype.updateEmotes = function (which) {
 		return this;
 	}
 	var emotes = require('./emotes');
+	var theEmotes = emotes.getEmotes();
+	var theEmotesKeys = [];
 	var self = this;
-	emotes.getEmotes().forEach(function (emoteInstance) {
+
+	theEmotes.forEach(function (emoteInstance) {
 		self.addEmote(emoteInstance);
+		theEmotesKeys.push(emoteInstance.getText());
 	});
+
+	// Difference the emotes and remove all non-valid emotes.
+	this.emotes.forEach(function (oldEmote) {
+		var text = oldEmote.getText()
+		if (theEmotesKeys.indexOf(text) < 0) {
+			logger.debug('Emote difference found, removing emote from UI: ' + text);
+			self.removeEmote(text);
+		}
+	});
+
+	// Save the emotes for next differencing.
+	this.emotes = theEmotes;
 
 	//Update groups.
 	Object.keys(this.groups).forEach(function (group) {
@@ -315,7 +331,15 @@ UIMenu.prototype.addGroup = function (emoteInstance) {
 		a = a.getChannelDisplayName().toLowerCase();
 		b = b.getChannelDisplayName().toLowerCase();
 
-		// Turbo goes first, always.
+		// Prime goes first, always.
+		if (aChannel === 'twitch_prime' && bChannel !== 'twitch_prime') {
+			return -1;
+		}
+		if (bChannel === 'twitch_prime' && aChannel !== 'twitch_prime') {
+			return 1;
+		}
+
+		// Turbo goes after Prime, always.
 		if (aChannel === 'turbo' && bChannel !== 'turbo') {
 			return -1;
 		}
@@ -323,7 +347,7 @@ UIMenu.prototype.addGroup = function (emoteInstance) {
 			return 1;
 		}
 
-		// Global goes second, always.
+		// Global goes after Turbo, always.
 		if (aChannel === '~global' && bChannel !== '~global') {
 			return -1;
 		}
@@ -369,6 +393,16 @@ UIMenu.prototype.addEmote = function (emoteInstance) {
 	group.toggleDisplay(group.isVisible(), true);
 
 	this.favorites.addEmote(emoteInstance);
+
+	return this;
+};
+
+UIMenu.prototype.removeEmote = function (name) {
+	var self = this;
+	Object.keys(this.groups).forEach(function (groupName) {
+		self.groups[groupName].removeEmote(name);
+	});
+	this.favorites.removeEmote(name);
 
 	return this;
 };
